@@ -1,0 +1,376 @@
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google-beta"
+      version = ">= 5.35.0" # Using google-beta as per the requirement
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = ">= 2.1"
+    }
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.1"
+    }
+  }
+}
+
+# Configure the Google Cloud provider
+provider "google" {
+  project = var.gcp_project_id
+  region  = var.region
+}
+
+# Get authentication token for the local-exec provisioner
+data "google_client_config" "current" {}
+
+# Enable the required Google Cloud APIs
+resource "google_project_service" "apis" {
+  for_each = toset([
+    "aiplatform.googleapis.com",
+    "run.googleapis.com",
+    "cloudbuild.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "sqladmin.googleapis.com",
+    "alloydb.googleapis.com",
+    "logging.googleapis.com",
+    "storage-component.googleapis.com",
+    "serviceusage.googleapis.com",
+    "networkmanagement.googleapis.com",
+    "servicenetworking.googleapis.com",
+    "dns.googleapis.com",
+    "vpcaccess.googleapis.com",
+    "spanner.googleapis.com",
+    "iam.googleapis.com",
+    "compute.googleapis.com",
+    "networkconnectivity.googleapis.com",
+    "notebooks.googleapis.com",
+    "dataform.googleapis.com",
+    "datacatalog.googleapis.com",
+    "dataproc.googleapis.com"
+  ])
+  service                    = each.key
+  disable_dependent_services = true
+}
+
+# Create a custom VPC
+resource "google_compute_network" "demo_vpc" {
+  name                    = "demo-vpc"
+  auto_create_subnetworks = true
+  mtu                     = 1460
+  routing_mode            = "REGIONAL"
+  depends_on              = [google_project_service.apis]
+}
+
+# Create a Cloud Router
+resource "google_compute_router" "router" {
+  name    = "nat-router"
+  network = google_compute_network.demo_vpc.id
+  region  = var.region
+}
+
+# Create a Cloud NAT Gateway
+resource "google_compute_router_nat" "nat" {
+  name                               = "managed-nat-gateway"
+  router                             = google_compute_router.router.name
+  region                             = google_compute_router.router.region
+  nat_ip_allocate_option             = "AUTO_ONLY"
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+  log_config {
+    enable = true
+    filter = "ERRORS_ONLY"
+  }
+}
+
+# Reserve a private IP range for service networking
+resource "google_compute_global_address" "private_ip_alloc" {
+  name          = "private-ip-alloc"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  network       = google_compute_network.demo_vpc.id
+}
+
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = google_compute_network.demo_vpc.id
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_ip_alloc.name]
+}
+
+# Create an AlloyDB cluster with PSA
+resource "google_alloydb_cluster" "default" {
+  cluster_id = "my-alloydb-cluster"
+  location   = var.region
+  deletion_policy = "FORCE"
+  network_config {
+    network = google_compute_network.demo_vpc.id
+    allocated_ip_range = google_compute_global_address.private_ip_alloc.name
+  }
+  initial_user {
+    password = var.alloydb_password
+  }
+  depends_on = [
+    google_project_service.apis,
+    google_service_networking_connection.private_vpc_connection
+  ]
+}
+
+# Create a single-zone AlloyDB instance with PSA
+resource "google_alloydb_instance" "default" {
+  cluster         = google_alloydb_cluster.default.name
+  instance_id     = "my-alloydb-instance"
+  instance_type   = "PRIMARY"
+  availability_type = "ZONAL"
+  client_connection_config {
+    ssl_config {
+        ssl_mode = "ALLOW_UNENCRYPTED_AND_ENCRYPTED"
+    }
+  }
+  machine_config {
+    cpu_count = 2
+  }
+  database_flags = {
+    "google_ml_integration.enable_model_support" = "on"
+  }
+  
+}
+
+# Create a single-zone Cloud SQL instance with PSC
+resource "google_sql_database_instance" "postgres" {
+  name             = "my-postgres-instance"
+  database_version = "POSTGRES_17"
+  region           = var.region
+  deletion_protection = false
+
+  settings {
+    tier              = "db-custom-2-7680"
+    availability_type = "ZONAL"
+    edition           = "ENTERPRISE"
+    ip_configuration {
+      psc_config {
+        psc_enabled = true
+        allowed_consumer_projects = [var.gcp_project_id]
+        psc_auto_connections {
+          consumer_network = google_compute_network.demo_vpc.id
+          consumer_service_project_id = var.gcp_project_id
+        }
+      }
+      ipv4_enabled = false
+    }
+
+  }
+  depends_on = [
+    google_project_service.apis,
+    google_service_networking_connection.private_vpc_connection
+  ]
+}
+
+# Create a Spanner instance
+resource "google_spanner_instance" "default" {
+  name         = "my-spanner-instance"
+  config       = "regional-us-central1"
+  display_name = "My Spanner Instance"
+  processing_units = 100
+  depends_on = [google_project_service.apis]
+}
+
+# --- START: Section for assigning permissions to the default compute service account ---
+
+# Define lists of roles to assign to the default compute service account
+locals {
+  # Roles to be applied ONLY to the GCS notebook bucket
+  compute_sa_bucket_roles = [
+    "roles/storage.objectViewer",
+    "roles/storage.objectCreator",
+    # Add any other bucket-specific roles here
+  ]
+
+  # Roles to be applied to the ENTIRE GCP project
+  compute_sa_project_roles = [
+    "roles/aiplatform.user",
+    "roles/run.invoker",
+    "roles/serviceusage.serviceUsageConsumer",
+    "roles/logging.logWriter",
+    "roles/aiplatform.user",
+    "roles/spanner.viewer",
+    "roles/dataflow.worker",
+    "roles/storage.admin",
+    "roles/spanner.databaseReader",
+    "roles/spanner.databaseAdmin",
+    "roles/secretmanager.admin",
+    "roles/run.developer",
+    "roles/iam.serviceAccountUser",
+    "roles/artifactregistry.writer",
+    "roles/storage.admin",
+    "roles/run.builder",
+    "roles/alloydb.client",
+    "roles/browser",
+    "roles/viewer",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/serviceusage.serviceUsageViewer",
+    "roles/alloydb.admin"
+    # Add any other project-wide roles here
+  ]
+
+  alloydb_sa_bucket_roles = [
+    "roles/storage.objectViewer",
+    "roles/storage.objectCreator",
+    # Add any other bucket-specific roles here
+  ]
+
+  alloydb_sa_project_roles = [
+    "roles/aiplatform.user",
+    # Add any other project-specific roles here
+  ]
+}
+
+# Access the project data object
+data "google_project" "project" {}
+
+# Define the service account name once to keep the code DRY (Don't Repeat Yourself)
+locals {
+  compute_service_account_member = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
+# Loop 1: Create multiple IAM role bindings for the GCS BUCKET
+resource "google_storage_bucket_iam_member" "gcs_default_sa_roles" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.compute_sa_bucket_roles)
+
+  bucket = google_storage_bucket.notebook_bucket.name
+  role   = each.key # 'each.key' refers to the current role in the loop
+  member = local.compute_service_account_member
+}
+
+# Loop 2: Create multiple IAM role bindings for the GCP PROJECT
+resource "google_project_iam_member" "project_default_sa_roles" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.compute_sa_project_roles)
+
+  project = data.google_project.project.id
+  role    = each.key # 'each.key' refers to the current role in the loop
+  member  = local.compute_service_account_member
+}
+
+# --- END: Section for assigning permissions to the default compute service account ---
+
+# --- START: Section for assigning permissions to the default AlloyDB service account ---
+
+# Define the service account name once to keep the code DRY (Don't Repeat Yourself)
+locals {
+  alloydb_service_account_member = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-alloydb.iam.gserviceaccount.com"
+}
+
+# Loop 1: Create multiple IAM role bindings for the GCS BUCKET
+resource "google_storage_bucket_iam_member" "alloydb_gcs_sa_roles" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.alloydb_sa_bucket_roles)
+
+  bucket = google_storage_bucket.notebook_bucket.name
+  role   = each.key # 'each.key' refers to the current role in the loop
+  member = local.alloydb_service_account_member
+}
+
+# Loop 2: Create multiple IAM role bindings for the GCP PROJECT
+resource "google_project_iam_member" "project_alloydb_sa_roles" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.alloydb_sa_project_roles)
+
+  project = data.google_project.project.id
+  role    = each.key # 'each.key' refers to the current role in the loop
+  member  = local.alloydb_service_account_member
+}
+
+# --- END: Section for assigning permissions to the default AlloyDB service account ---
+
+# Create a GCS bucket
+resource "google_storage_bucket" "notebook_bucket" {
+  name                        = "project-files-${var.gcp_project_id}"
+  location                    = "US"
+  force_destroy               = true
+  uniform_bucket_level_access = true
+}
+
+# Get all files ending with .ipynb in the specified directory
+locals {
+  notebook_files = fileset("${path.module}/../notebooks", "*.ipynb")
+}
+
+# Loop through the fileset and create a GCS object for each one
+resource "google_storage_bucket_object" "notebooks" {
+  for_each = local.notebook_files
+
+  name   = "notebooks/${each.key}" # Creates objects like "notebooks/01-data-exploration.ipynb"
+  source = "${path.module}/../notebooks/${each.key}"
+  bucket = google_storage_bucket.notebook_bucket.name
+
+}
+
+# Create a Colab Enterprise Workbench instance in the demo-vpc
+resource "google_workbench_instance" "google_workbench" {
+  name     = "colab-enterprise-workbench"
+  location = "${var.region}-a"
+
+  lifecycle {
+    replace_triggered_by = [
+      google_storage_bucket_object.notebooks
+    ]
+  }
+
+  gce_setup {
+    machine_type = "n1-standard-2"
+
+    # Connect to the demo-vpc
+    network_interfaces {
+      network    = google_compute_network.demo_vpc.id
+      # The subnet will be chosen automatically from the auto-mode VPC.
+    }
+    
+    # Enable public IP address
+    disable_public_ip = true
+
+    # Shielded VM Configuration
+    shielded_instance_config {
+      enable_secure_boot          = true
+      enable_vtpm                 = true
+      enable_integrity_monitoring = true
+    }
+
+    metadata = {
+      # This script runs automatically when the instance starts
+      "startup-script" = <<-EOF
+        #!/bin/bash
+        echo "Starting file download"
+        
+        # Define the target directory for the notebooks
+        TARGET_DIR="/home/jupyter/notebooks"
+
+        # Create the target directory, -p ensures it doesn't fail if it exists
+        mkdir -p $${TARGET_DIR}
+
+        # Recursively copy all notebooks from the GCS bucket to the instance
+        # The -n flag prevents overwriting existing files, making the script safer to re-run
+        gsutil -m cp -n gs://${google_storage_bucket.notebook_bucket.name}/notebooks/* $${TARGET_DIR}/
+
+        # Change the ownership of all downloaded files and directories to the jupyter user
+        # This is CRITICAL for the files to be accessible in the JupyterLab UI
+        chown -R jupyter:jupyter /home/jupyter
+
+      EOF
+    }
+    
+
+
+  }
+
+  # The instance is implicitly owned by the service account running Terraform.
+  # Access is managed via IAM roles (e.g., Notebooks Runner, AI Platform User).
+
+  depends_on = [
+    google_project_service.apis, 
+    google_compute_router_nat.nat,
+    google_storage_bucket_object.notebooks
+  ]
+}
+
+
