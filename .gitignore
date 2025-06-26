@@ -196,3 +196,6 @@ cython_debug/
 # Terraform
 .terraform*
 terraform.tfstate*
+
+# Flag files
+.dataflow_spanner_load_completed

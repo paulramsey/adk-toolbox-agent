@@ -47,7 +47,8 @@ resource "google_project_service" "apis" {
     "notebooks.googleapis.com",
     "dataform.googleapis.com",
     "datacatalog.googleapis.com",
-    "dataproc.googleapis.com"
+    "dataproc.googleapis.com",
+    "dataflow.googleapis.com"
   ])
   service                    = each.key
   disable_dependent_services = true
@@ -80,6 +81,23 @@ resource "google_compute_router_nat" "nat" {
     enable = true
     filter = "ERRORS_ONLY"
   }
+}
+
+resource "google_compute_firewall" "dataflow_internal_communication" {
+  name    = "allow-dataflow-internal"
+  network = google_compute_network.demo_vpc.name
+  project = var.gcp_project_id
+
+  allow {
+    protocol = "tcp"
+    ports    = ["12345-12346"]
+  }
+
+  source_tags = ["dataflow"]
+  target_tags = ["dataflow"]
+  direction   = "INGRESS"
+  priority    = 1000 # You can adjust the priority if needed. Lower numbers have higher precedence.
+  description = "Allows internal TCP communication between Dataflow workers on ports 12345-12346."
 }
 
 # Reserve a private IP range for service networking
@@ -167,11 +185,181 @@ resource "google_sql_database_instance" "postgres" {
 
 # Create a Spanner instance
 resource "google_spanner_instance" "default" {
-  name         = "my-spanner-instance"
-  config       = "regional-us-central1"
-  display_name = "My Spanner Instance"
-  processing_units = 100
+  name              = "my-spanner-instance"
+  config            = "regional-us-central1"
+  display_name      = "Financial Graph Database"
+  processing_units  = 100
+  edition           = "ENTERPRISE"
   depends_on = [google_project_service.apis]
+}
+
+# Create the Spanner database and schema
+resource "google_spanner_database" "database" {
+  instance = google_spanner_instance.default.name
+  name     = "finance-graph"
+  version_retention_period = "3d"
+  default_time_zone = "UTC"
+  ddl = [<<-EOT
+
+    CREATE TABLE Person (
+    id                  INT64 NOT NULL,
+    name                STRING(MAX),
+    ) PRIMARY KEY (id)
+
+    EOT
+    ,
+    <<-EOT
+
+    CREATE TABLE Account (
+    id                  INT64 NOT NULL,
+    create_time         TIMESTAMP,
+    is_blocked          BOOL,
+    type                STRING(MAX),
+    ) PRIMARY KEY (id)
+
+    EOT
+    ,
+
+    <<-EOT
+
+    CREATE TABLE Loan (
+    id                  INT64 NOT NULL,
+    loan_amount         FLOAT64,
+    balance             FLOAT64,
+    create_time         TIMESTAMP,
+    interest_rate       FLOAT64,
+    ) PRIMARY KEY (id)
+
+    EOT
+    ,
+
+    <<-EOT
+
+    CREATE TABLE AccountTransferAccount (
+    id                  INT64 NOT NULL,
+    to_id               INT64 NOT NULL,
+    amount              FLOAT64,
+    create_time         TIMESTAMP NOT NULL,
+    ) PRIMARY KEY (id, to_id, create_time),
+    INTERLEAVE IN PARENT Account ON DELETE CASCADE
+
+    EOT
+    ,
+
+    <<-EOT
+
+    CREATE TABLE AccountRepayLoan (
+    id                  INT64 NOT NULL,
+    loan_id             INT64 NOT NULL,
+    amount              FLOAT64,
+    create_time         TIMESTAMP NOT NULL,
+    ) PRIMARY KEY (id, loan_id, create_time),
+    INTERLEAVE IN PARENT Account ON DELETE CASCADE
+
+    EOT
+    ,
+
+    <<-EOT
+
+    CREATE TABLE PersonOwnAccount (
+    id                  INT64 NOT NULL,
+    account_id          INT64 NOT NULL,
+    create_time         TIMESTAMP,
+    ) PRIMARY KEY (id, account_id),
+    INTERLEAVE IN PARENT Person ON DELETE CASCADE
+
+    EOT
+    ,
+
+    <<-EOT
+
+    CREATE TABLE AccountAudits (
+    id                  INT64 NOT NULL,
+    audit_timestamp     TIMESTAMP,
+    audit_details       STRING(MAX),
+    ) PRIMARY KEY (id, audit_timestamp),
+    INTERLEAVE IN PARENT Account ON DELETE CASCADE
+
+    EOT
+    ,
+
+    <<-EOT
+
+    CREATE PROPERTY GRAPH FinGraph
+    NODE TABLES (
+        Person,
+        Account,
+        Loan
+    )
+    EDGE TABLES (
+        AccountTransferAccount
+        SOURCE KEY (id) REFERENCES Account
+        DESTINATION KEY (to_id) REFERENCES Account
+        LABEL Transfers,
+        AccountRepayLoan
+        SOURCE KEY (id) REFERENCES Account
+        DESTINATION KEY (loan_id) REFERENCES Loan
+        LABEL Repays,
+        PersonOwnAccount
+        SOURCE KEY (id) REFERENCES Person
+        DESTINATION KEY (account_id) REFERENCES Account
+        LABEL Owns
+    )
+
+    EOT
+  ]
+  deletion_protection = false
+  depends_on = [ 
+    google_spanner_instance.default 
+  ]
+}
+
+# This resource runs the Spanner data import job only once (determined by existence of the local .dataflow_spanner_load_completed file)
+resource "null_resource" "trigger_spanner_data_load" {
+  depends_on = [
+    google_spanner_database.database,
+    google_storage_bucket.notebook_bucket
+  ]
+
+  # The triggers block ensures this null_resource runs only when the Spanner
+  # database or the input directory changes. In this case, we only want it
+  # to run once, so we'll use a local file as a flag.
+  triggers = {
+    # This trigger relies on the existence of a local file.
+    # If the file doesn't exist, the null_resource will run.
+    # After it runs and the Dataflow job is initiated, the file is created.
+    # Subsequent applies will see the file, and thus not re-run.
+    dataflow_job_ran_flag = !fileexists("${path.cwd}/.dataflow_spanner_load_completed") ? "completed" : "pending"
+    spanner_instance_id = google_spanner_instance.default.id
+    spanner_database_id = google_spanner_database.database.id
+  }
+
+  # Use a local-exec provisioner to execute a command on the machine
+  # where Terraform is being run.
+  provisioner "local-exec" {
+    # Check if the flag file exists. If it does, skip the Dataflow job.
+    # This ensures that even if a trigger changes (e.g., you update a tag on Spanner),
+    # the Dataflow job itself won't re-run if it has already been initiated successfully.
+    # The `|| true` is to prevent `terraform apply` from failing if the file exists and `grep` exits with 1.
+    when    = create
+    command = <<-EOT
+      if [ -f "${path.cwd}/.dataflow_spanner_load_completed" ]; then
+        echo "Dataflow Spanner data load already initiated. Skipping."
+      else
+        echo "Initiating Dataflow Spanner data load..."
+        gcloud dataflow jobs run import-spanner \
+          --gcs-location="gs://dataflow-templates-${var.region}/latest/GCS_Avro_to_Cloud_Spanner" \
+          --region="${var.region}" \
+          --staging-location="gs://${google_storage_bucket.notebook_bucket.name}/dataflow_temp" \
+          --parameters="instanceId=${google_spanner_instance.default.name},databaseId=${google_spanner_database.database.name},inputDir=gs://pr-public-demo-data/adk-toolbox-demo/data/spanner-finance-graph/" \
+          --network="${google_compute_network.demo_vpc.name}"
+
+        # Create a flag file to indicate the job has been initiated.
+        touch "${path.cwd}/.dataflow_spanner_load_completed"
+        echo "Dataflow Spanner data load initiated and flag file created."
+      fi
+    EOT
+  }
 }
 
 # --- START: Section for assigning permissions to the default compute service account ---
@@ -208,7 +396,8 @@ locals {
     "roles/viewer",
     "roles/iam.serviceAccountTokenCreator",
     "roles/serviceusage.serviceUsageViewer",
-    "roles/alloydb.admin"
+    "roles/alloydb.admin",
+    "roles/dataflow.admin"
     # Add any other project-wide roles here
   ]
 
@@ -343,14 +532,14 @@ resource "google_workbench_instance" "google_workbench" {
         echo "Starting file download"
         
         # Define the target directory for the notebooks
-        TARGET_DIR="/home/jupyter/notebooks"
+        TARGET_DIR="/home/jupyter/"
 
         # Create the target directory, -p ensures it doesn't fail if it exists
         mkdir -p $${TARGET_DIR}
 
         # Recursively copy all notebooks from the GCS bucket to the instance
         # The -n flag prevents overwriting existing files, making the script safer to re-run
-        gsutil -m cp -n gs://${google_storage_bucket.notebook_bucket.name}/notebooks/* $${TARGET_DIR}/
+        gsutil -m cp -r gs://${google_storage_bucket.notebook_bucket.name}/notebooks/ $${TARGET_DIR}/
 
         # Change the ownership of all downloaded files and directories to the jupyter user
         # This is CRITICAL for the files to be accessible in the JupyterLab UI

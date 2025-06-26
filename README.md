@@ -16,6 +16,7 @@
     Create local credentials by running the following:
 
     ```
+    gcloud auth login
     gcloud auth application-default login
     ```
 
