@@ -155,12 +155,13 @@ resource "google_alloydb_instance" "default" {
     "password.min_pass_length"                   = "10"
   }
   # Optional Public IP configuration
-  #network_config {
-  #  enable_public_ip = true
-  #  authorized_external_networks {
-  #      cidr_range = "1.2.3.4/32" # Replace with your IP address
-  #  }
-  #}
+  network_config {
+    enable_public_ip = false
+    # Uncomment the lines below and set your IP if you set enable_public_ip = true
+    #authorized_external_networks {
+    #    cidr_range = "1.2.3.4/32" # Replace with your IP address
+    #}
+  }
   
 }
 
