@@ -494,7 +494,7 @@ resource "google_storage_bucket" "notebook_bucket" {
 
 # Get all files ending with .ipynb in the specified directory
 locals {
-  notebook_files = fileset("${path.module}/../notebooks", "*.ipynb")
+  notebook_files = fileset("${path.module}/../notebooks", "**/*.ipynb")
 }
 
 # Loop through the fileset and create a GCS object for each one
