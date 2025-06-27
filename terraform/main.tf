@@ -507,9 +507,9 @@ resource "google_storage_bucket_object" "notebooks" {
 
 }
 
-# Create a Colab Enterprise Workbench instance in the demo-vpc
+# Create a Vertex AI Workbench instance in the demo-vpc
 resource "google_workbench_instance" "google_workbench" {
-  name     = "colab-enterprise-workbench"
+  name     = "vertex-ai-workbench"
   location = "${var.region}-a"
 
   lifecycle {
