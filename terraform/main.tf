@@ -160,7 +160,7 @@ resource "google_alloydb_instance" "default" {
   #  authorized_external_networks {
   #      cidr_range = "1.2.3.4/32" # Replace with your IP address
   #  }
-  }
+  #}
   
 }
 
