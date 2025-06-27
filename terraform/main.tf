@@ -149,6 +149,17 @@ resource "google_alloydb_instance" "default" {
   }
   database_flags = {
     "google_ml_integration.enable_model_support" = "on"
+    "password.enforce_complexity"                = "on"
+    "password.min_uppercase_letters"             = "1"
+    "password.min_numerical_chars"               = "1"
+    "password.min_pass_length"                   = "10"
+  }
+  # Optional Public IP configuration
+  #network_config {
+  #  enable_public_ip = true
+  #  authorized_external_networks {
+  #      cidr_range = "1.2.3.4/32" # Replace with your IP address
+  #  }
   }
   
 }

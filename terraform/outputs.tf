@@ -26,3 +26,13 @@ output "colab_workbench_instance_name" {
 output "workbench_proxy_uri" {
   value = google_workbench_instance.google_workbench.proxy_uri
 }
+
+output "alloydb_private_ip" {
+    value = google_alloydb_instance.default.ip_address
+}
+
+# Optional Public IP
+# Enable public IP in the google_alloydb_instance.default resource before uncommenting this output
+#output "alloydb_public_ip" {
+#    value = google_alloydb_instance.default.public_ip_address
+#}
