@@ -48,7 +48,8 @@ resource "google_project_service" "apis" {
     "dataform.googleapis.com",
     "datacatalog.googleapis.com",
     "dataproc.googleapis.com",
-    "dataflow.googleapis.com"
+    "dataflow.googleapis.com",
+    "secretmanager.googleapis.com"
   ])
   service                    = each.key
   disable_dependent_services = true
@@ -155,13 +156,12 @@ resource "google_alloydb_instance" "default" {
     "password.min_pass_length"                   = "10"
   }
   # Optional Public IP configuration
-  network_config {
-    enable_public_ip = false
-    # Uncomment the lines below and set your IP if you set enable_public_ip = true
-    #authorized_external_networks {
-    #    cidr_range = "1.2.3.4/32" # Replace with your IP address
-    #}
-  }
+  #network_config {
+  #  enable_public_ip = true
+  #  authorized_external_networks {
+  #      cidr_range = "1.2.3.4/32" # Replace with your IP address
+  #  }
+  #}
   
 }
 
@@ -389,6 +389,7 @@ locals {
   compute_sa_project_roles = [
     "roles/aiplatform.user",
     "roles/run.invoker",
+    "roles/run.admin",
     "roles/serviceusage.serviceUsageConsumer",
     "roles/logging.logWriter",
     "roles/aiplatform.user",
@@ -409,19 +410,10 @@ locals {
     "roles/iam.serviceAccountTokenCreator",
     "roles/serviceusage.serviceUsageViewer",
     "roles/alloydb.admin",
-    "roles/dataflow.admin"
+    "roles/dataflow.admin",
+    "roles/iam.serviceAccountCreator",
+    "roles/vpcaccess.admin"
     # Add any other project-wide roles here
-  ]
-
-  alloydb_sa_bucket_roles = [
-    "roles/storage.objectViewer",
-    "roles/storage.objectCreator",
-    # Add any other bucket-specific roles here
-  ]
-
-  alloydb_sa_project_roles = [
-    "roles/aiplatform.user",
-    # Add any other project-specific roles here
   ]
 }
 
@@ -460,6 +452,17 @@ resource "google_project_iam_member" "project_default_sa_roles" {
 # Define the service account name once to keep the code DRY (Don't Repeat Yourself)
 locals {
   alloydb_service_account_member = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-alloydb.iam.gserviceaccount.com"
+
+  alloydb_sa_bucket_roles = [
+    "roles/storage.objectViewer",
+    "roles/storage.objectCreator",
+    # Add any other bucket-specific roles here
+  ]
+
+  alloydb_sa_project_roles = [
+    "roles/aiplatform.user",
+    # Add any other project-specific roles here
+  ]
 }
 
 # Loop 1: Create multiple IAM role bindings for the GCS BUCKET
@@ -483,6 +486,72 @@ resource "google_project_iam_member" "project_alloydb_sa_roles" {
 }
 
 # --- END: Section for assigning permissions to the default AlloyDB service account ---
+
+# --- START: Section for creating a Toolbox IAM user and assigning roles ---
+
+# Create service account for MCP Toolbox
+resource "google_service_account" "toolbox_identity" {
+  account_id   = "toolbox-identity" 
+  display_name = "MCP Toolbox Identity Service Account" 
+  description  = "Service account for MCP Toolbox."
+  project      = var.gcp_project_id
+}
+
+locals {
+
+  toolbox_sa_bucket_roles = [
+    "roles/storage.objectViewer",
+    "roles/storage.objectCreator",
+    # Add any other bucket-specific roles here
+  ]
+
+  toolbox_sa_project_roles = [
+    "roles/secretmanager.secretAccessor",
+    "roles/spanner.viewer",
+    "roles/spanner.databaseReader",
+    "roles/spanner.databaseAdmin",
+    "roles/alloydb.client",
+    "roles/alloydb.databaseUser",
+    "roles/serviceusage.serviceUsageConsumer",
+    "roles/serviceusage.serviceUsageViewer",
+    "roles/storage.objectAdmin",
+    "roles/logging.viewer",
+    "roles/logging.logWriter",
+    "roles/logging.viewer",
+    "roles/cloudsql.editor",
+    "roles/cloudsql.client",
+    "roles/cloudsql.instanceUser",
+    "roles/cloudsql.viewer",
+    "roles/cloudsql.schemaViewer"
+    # Add any other project-specific roles here
+  ]
+}
+
+# Loop 1: Create multiple IAM role bindings for the GCS BUCKET
+resource "google_storage_bucket_iam_member" "toolbox_sa_gcs_roles" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.toolbox_sa_bucket_roles)
+
+  bucket = google_storage_bucket.notebook_bucket.name
+  role   = each.key # 'each.key' refers to the current role in the loop
+  member = "serviceAccount:${google_service_account.toolbox_identity.email}"
+
+  depends_on = [ google_service_account.toolbox_identity ]
+}
+
+# Loop 2: Create multiple IAM role bindings for the GCP PROJECT
+resource "google_project_iam_member" "toolbox_sa_project_roles" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.toolbox_sa_project_roles)
+
+  project = data.google_project.project.id
+  role    = each.key # 'each.key' refers to the current role in the loop
+  member  = "serviceAccount:${google_service_account.toolbox_identity.email}"
+
+  depends_on = [ google_service_account.toolbox_identity ]
+}
+
+# --- END: Section for creating a Toolbox IAM user and assigning roles ---
 
 # Create a GCS bucket
 resource "google_storage_bucket" "notebook_bucket" {
