@@ -412,7 +412,8 @@ locals {
     "roles/alloydb.admin",
     "roles/dataflow.admin",
     "roles/iam.serviceAccountCreator",
-    "roles/vpcaccess.admin"
+    "roles/vpcaccess.admin",
+    "roles/artifactregistry.admin"
     # Add any other project-wide roles here
   ]
 }
