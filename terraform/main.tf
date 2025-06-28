@@ -563,7 +563,7 @@ resource "google_storage_bucket" "notebook_bucket" {
 
 # Get all files ending with .ipynb in the specified directory
 locals {
-  notebook_files = fileset("${path.module}/../notebooks", "**/*.ipynb")
+  notebook_files = fileset("${path.module}/../notebooks", "**/*")
 }
 
 # Loop through the fileset and create a GCS object for each one
@@ -625,6 +625,9 @@ resource "google_workbench_instance" "google_workbench" {
         # Change the ownership of all downloaded files and directories to the jupyter user
         # This is CRITICAL for the files to be accessible in the JupyterLab UI
         chown -R jupyter:jupyter /home/jupyter
+
+        # Remove the sample notebook to avoid confusion
+        rm -f /home/jupyter/notebook_template.ipynb
 
       EOF
     }
