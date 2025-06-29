@@ -49,7 +49,9 @@ resource "google_project_service" "apis" {
     "datacatalog.googleapis.com",
     "dataproc.googleapis.com",
     "dataflow.googleapis.com",
-    "secretmanager.googleapis.com"
+    "secretmanager.googleapis.com",
+    "cloudtrace.googleapis.com",
+    "monitoring.googleapis.com"
   ])
   service                    = each.key
   disable_dependent_services = true
@@ -212,6 +214,33 @@ resource "google_compute_forwarding_rule" "default" {
   ip_address            = google_compute_address.default.self_link
   load_balancing_scheme = ""
   target                = google_sql_database_instance.postgres.psc_service_attachment_link
+}
+
+# Create a DNS private zone for PSC connectivity
+# This resource only needs to be created once per VPC.
+resource "google_dns_managed_zone" "psc_private_zone" {
+  project     = var.gcp_project_id
+  name        = "${var.region}-sql-goog"
+  dns_name    = "${var.region}.sql.goog."
+  description = "Private zone for PSC created by Terraform"
+
+  visibility = "private"
+  private_visibility_config {
+    networks {
+      network_url = google_compute_network.demo_vpc.id
+    }
+  }
+}
+
+# Create an 'A' record to map the instance's DNS name to the PSC endpoint IP.
+resource "google_dns_record_set" "psc_instance_record" {
+  project      = var.gcp_project_id
+  type         = "A"
+  rrdatas      = [google_compute_address.default.address]
+  name         = google_sql_database_instance.postgres.dns_name
+  managed_zone = google_dns_managed_zone.psc_private_zone.name
+  ttl          = 300
+  
 }
 
 # Create a Spanner instance
@@ -438,7 +467,8 @@ locals {
     "roles/dns.admin",
     "roles/dns.peer",
     "roles/cloudtrace.admin",
-    "roles/cloudtrace.user"
+    "roles/cloudtrace.user",
+    "roles/monitoring.metricWriter"
     # Add any other project-wide roles here
   ]
 }
@@ -543,12 +573,14 @@ locals {
     "roles/storage.objectAdmin",
     "roles/logging.viewer",
     "roles/logging.logWriter",
-    "roles/logging.viewer",
     "roles/cloudsql.editor",
     "roles/cloudsql.client",
     "roles/cloudsql.instanceUser",
     "roles/cloudsql.viewer",
-    "roles/cloudsql.schemaViewer"
+    "roles/cloudsql.schemaViewer",
+    "roles/cloudtrace.admin",
+    "roles/cloudtrace.user",
+    "roles/monitoring.metricWriter"
     # Add any other project-specific roles here
   ]
 }
