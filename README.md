@@ -1,7 +1,5 @@
 ## Setup
 
-1. Install [`pip` and `virtualenv`][cloud_python_setup] if you do not already have them.
-
 1. Install [Terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli) the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
 
 1. Clone this repository:
@@ -27,40 +25,41 @@
     Set your project context by running the following:
 
     ```
-    gcloud auth application-default set-quota-project adk-toolbox
     gcloud config set project adk-toolbox
+    gcloud auth application-default set-quota-project adk-toolbox
     ```
 
-1. Create a virtualenv. Samples are compatible with Python 3.6+.
+1. Define environment variables.
 
     ```
-    python3 -m venv env
-    source env/bin/activate
-    ```
-
-1. Install the dependencies needed to run the samples.
-
-    ```
-    pip install -r requirements.txt
+    export TF_VAR_gcp_project_id="YOUR_PROJECT"
+    export TF_VAR_region="YOUR_REGION"
+    export TF_VAR_alloydb_password="YOUR_PASSWORD"
+    export TF_VAR_cloud_sql_password="YOUR_PASSWORD"
     ```
 
 1. Deploy base infrastructure with Terraform.
 
     ```
+    # Initialize terraform
     cd terraform/
     terraform init
     ```
 
     ```
-    terraform plan -var "gcp_project_id=YOUR_PROJECT" -var "region=YOUR_REGION" -var "alloydb_password=YOUR_PASSWORD"
+    # View resource creation plan
+    terraform plan
     ```
 
     ```
-    terraform apply -var "gcp_project_id=YOUR_PROJECT" -var "region=YOUR_REGION" -var "alloydb_password=YOUR_PASSWORD"
+    # Apply the terraform template
+    terraform apply
     ```
 
 1. Tear down the deployed infrastructure with Terraform.
 
     ```
-    terraform destroy -var "gcp_project_id=YOUR_PROJECT" -var "region=YOUR_REGION" -var "alloydb_password=YOUR_PASSWORD"
+    terraform destroy 
     ```
+
+1. Login to the Vertex AI workbench endpoint listed in the Terraform outputs, and walk through the notebooks, starting with `1_setup_and_explore_databases.ipynb`.

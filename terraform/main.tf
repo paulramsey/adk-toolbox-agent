@@ -167,10 +167,11 @@ resource "google_alloydb_instance" "default" {
 
 # Create a single-zone Cloud SQL instance with PSC
 resource "google_sql_database_instance" "postgres" {
-  name             = "my-postgres-instance"
-  database_version = "POSTGRES_17"
-  region           = var.region
+  name                 = "my-postgres-instance"
+  database_version    = "POSTGRES_17"
+  region              = var.region
   deletion_protection = false
+  root_password       = var.cloud_sql_password
 
   settings {
     tier              = "db-custom-2-7680"
@@ -193,6 +194,24 @@ resource "google_sql_database_instance" "postgres" {
     google_project_service.apis,
     google_service_networking_connection.private_vpc_connection
   ]
+}
+
+# Create a PSC endpoint to connect to Cloud SQL from the VPC
+resource "google_compute_address" "default" {
+  name         = "psc-compute-address"
+  region       = "us-central1"
+  address_type = "INTERNAL"
+  subnetwork   = google_compute_network.demo_vpc.name
+}
+
+# Create a forwarding rule for the Cloud SQL PSC endpoint
+resource "google_compute_forwarding_rule" "default" {
+  name                  = "psc-forwarding-rule-${google_sql_database_instance.postgres.name}"
+  region                = var.region
+  network               = google_compute_network.demo_vpc.name
+  ip_address            = google_compute_address.default.self_link
+  load_balancing_scheme = ""
+  target                = google_sql_database_instance.postgres.psc_service_attachment_link
 }
 
 # Create a Spanner instance
@@ -413,7 +432,13 @@ locals {
     "roles/dataflow.admin",
     "roles/iam.serviceAccountCreator",
     "roles/vpcaccess.admin",
-    "roles/artifactregistry.admin"
+    "roles/artifactregistry.admin",
+    "roles/cloudsql.client",
+    "roles/compute.networkAdmin",
+    "roles/dns.admin",
+    "roles/dns.peer",
+    "roles/cloudtrace.admin",
+    "roles/cloudtrace.user"
     # Add any other project-wide roles here
   ]
 }

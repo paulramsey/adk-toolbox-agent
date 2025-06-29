@@ -10,7 +10,13 @@ variable "region" {
 }
 
 variable "alloydb_password" {
-  description = "The password for the initial user of the AlloyDB cluster."
+  description = "The password for the AlloyDB postgres user."
+  type        = string
+  sensitive   = true
+}
+
+variable "cloud_sql_password" {
+  description = "The password for the Cloud SQL postgres user."
   type        = string
   sensitive   = true
 }
