@@ -468,7 +468,8 @@ locals {
     "roles/dns.peer",
     "roles/cloudtrace.admin",
     "roles/cloudtrace.user",
-    "roles/monitoring.metricWriter"
+    "roles/monitoring.metricWriter",
+    "roles/resourcemanager.projectIamAdmin"
     # Add any other project-wide roles here
   ]
 }
