@@ -52,7 +52,8 @@ resource "google_project_service" "apis" {
     "secretmanager.googleapis.com",
     "cloudtrace.googleapis.com",
     "monitoring.googleapis.com",
-    "iap.googleapis.com"
+    "iap.googleapis.com",
+    "datastream.googleapis.com"
   ])
   service                    = each.key
   disable_dependent_services = true
@@ -102,6 +103,21 @@ resource "google_compute_firewall" "dataflow_internal_communication" {
   direction   = "INGRESS"
   priority    = 1000 # You can adjust the priority if needed. Lower numbers have higher precedence.
   description = "Allows internal TCP communication between Dataflow workers on ports 12345-12346."
+}
+
+resource "google_compute_firewall" "iap_internal_communication" {
+  name    = "allow-iap-internal"
+  network = google_compute_network.demo_vpc.name
+  project = var.gcp_project_id
+
+  allow {
+    protocol = "all"
+  }
+
+  source_ranges = ["35.235.240.0/20"]
+  direction   = "INGRESS"
+  priority    = 1000 # You can adjust the priority if needed. Lower numbers have higher precedence.
+  description = "Allows internal TCP communication for IAP."
 }
 
 # Reserve a private IP range for service networking
@@ -474,7 +490,12 @@ locals {
     "roles/compute.admin",
     "roles/compute.securityAdmin",
     "roles/iap.admin",
-    "roles/iap.settingsAdmin"
+    "roles/iap.settingsAdmin",
+    "roles/iam.serviceAccountAdmin",
+    "roles/iam.securityAdmin",
+    "roles/iam.serviceAccountOpenIdTokenCreator",
+    "roles/iam.workloadIdentityUser",
+    "roles/iam.serviceAccountKeyAdmin"
     # Add any other project-wide roles here
   ]
 }
