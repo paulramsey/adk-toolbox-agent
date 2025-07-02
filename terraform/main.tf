@@ -51,7 +51,8 @@ resource "google_project_service" "apis" {
     "dataflow.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudtrace.googleapis.com",
-    "monitoring.googleapis.com"
+    "monitoring.googleapis.com",
+    "iap.googleapis.com"
   ])
   service                    = each.key
   disable_dependent_services = true
@@ -469,7 +470,11 @@ locals {
     "roles/cloudtrace.admin",
     "roles/cloudtrace.user",
     "roles/monitoring.metricWriter",
-    "roles/resourcemanager.projectIamAdmin"
+    "roles/resourcemanager.projectIamAdmin",
+    "roles/compute.admin",
+    "roles/compute.securityAdmin",
+    "roles/iap.admin",
+    "roles/iap.settingsAdmin"
     # Add any other project-wide roles here
   ]
 }
