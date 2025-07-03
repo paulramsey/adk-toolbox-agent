@@ -439,97 +439,6 @@ resource "null_resource" "trigger_spanner_data_load" {
   }
 }
 
-# --- START: Section for assigning permissions to the default compute service account ---
-
-# Define lists of roles to assign to the default compute service account
-locals {
-  # Roles to be applied ONLY to the GCS notebook bucket
-  compute_sa_bucket_roles = [
-    "roles/storage.objectViewer",
-    "roles/storage.objectCreator",
-    # Add any other bucket-specific roles here
-  ]
-
-  # Roles to be applied to the ENTIRE GCP project
-  compute_sa_project_roles = [
-    "roles/aiplatform.user",
-    "roles/run.invoker",
-    "roles/run.admin",
-    "roles/serviceusage.serviceUsageConsumer",
-    "roles/logging.logWriter",
-    "roles/aiplatform.user",
-    "roles/spanner.viewer",
-    "roles/dataflow.worker",
-    "roles/storage.admin",
-    "roles/spanner.databaseReader",
-    "roles/spanner.databaseAdmin",
-    "roles/secretmanager.admin",
-    "roles/run.developer",
-    "roles/iam.serviceAccountUser",
-    "roles/artifactregistry.writer",
-    "roles/storage.admin",
-    "roles/run.builder",
-    "roles/alloydb.client",
-    "roles/browser",
-    "roles/viewer",
-    "roles/iam.serviceAccountTokenCreator",
-    "roles/serviceusage.serviceUsageViewer",
-    "roles/alloydb.admin",
-    "roles/dataflow.admin",
-    "roles/iam.serviceAccountCreator",
-    "roles/vpcaccess.admin",
-    "roles/artifactregistry.admin",
-    "roles/cloudsql.client",
-    "roles/compute.networkAdmin",
-    "roles/dns.admin",
-    "roles/dns.peer",
-    "roles/cloudtrace.admin",
-    "roles/cloudtrace.user",
-    "roles/monitoring.metricWriter",
-    "roles/resourcemanager.projectIamAdmin",
-    "roles/compute.admin",
-    "roles/compute.securityAdmin",
-    "roles/iap.admin",
-    "roles/iap.settingsAdmin",
-    "roles/iam.serviceAccountAdmin",
-    "roles/iam.securityAdmin",
-    "roles/iam.serviceAccountOpenIdTokenCreator",
-    "roles/iam.workloadIdentityUser",
-    "roles/iam.serviceAccountKeyAdmin"
-    # Add any other project-wide roles here
-  ]
-}
-
-# Access the project data object
-data "google_project" "project" {}
-
-# Define the service account name once to keep the code DRY (Don't Repeat Yourself)
-locals {
-  compute_service_account_member = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
-}
-
-# Loop 1: Create multiple IAM role bindings for the GCS BUCKET
-resource "google_storage_bucket_iam_member" "gcs_default_sa_roles" {
-  # This for_each creates a resource instance for each role in the list
-  for_each = toset(local.compute_sa_bucket_roles)
-
-  bucket = google_storage_bucket.notebook_bucket.name
-  role   = each.key # 'each.key' refers to the current role in the loop
-  member = local.compute_service_account_member
-}
-
-# Loop 2: Create multiple IAM role bindings for the GCP PROJECT
-resource "google_project_iam_member" "project_default_sa_roles" {
-  # This for_each creates a resource instance for each role in the list
-  for_each = toset(local.compute_sa_project_roles)
-
-  project = data.google_project.project.id
-  role    = each.key # 'each.key' refers to the current role in the loop
-  member  = local.compute_service_account_member
-}
-
-# --- END: Section for assigning permissions to the default compute service account ---
-
 # --- START: Section for assigning permissions to the default AlloyDB service account ---
 
 # Define the service account name once to keep the code DRY (Don't Repeat Yourself)
@@ -570,12 +479,112 @@ resource "google_project_iam_member" "project_alloydb_sa_roles" {
 
 # --- END: Section for assigning permissions to the default AlloyDB service account ---
 
-# --- START: Section for creating a Toolbox IAM user and assigning roles ---
+# --- START: Section for creating a Vertex AI Workbench service account and assigning roles ---
+# This service account will be creating and testing a large number of services in this
+# lab, which is why there are so many roles assigned to it. In the real world, you would
+# provision the resources shown in the notebooks with a dedicated platform admin user or
+# CI/CD pipeline service account.
+
+# Create service account for Vertex AI Workbench
+resource "google_service_account" "notebook_service_account" {
+  account_id   = "notebook-service-account" 
+  display_name = "Vertex AI Workbench Notebook Service Account" 
+  description  = "Service account for Vertex AI Workbench Notebooks."
+  project      = var.gcp_project_id
+}
+
+# Define lists of roles to assign to the default compute service account
+locals {
+  # Roles to be applied ONLY to the GCS notebook bucket
+  notebook_sa_bucket_roles = [
+    "roles/storage.objectViewer",
+    "roles/storage.objectCreator",
+    # Add any other bucket-specific roles here
+  ]
+
+  # Roles to be applied at the project level
+  notebook_sa_project_roles = [
+    "roles/viewer",
+    "roles/browser",
+    "roles/aiplatform.user",
+    "roles/iam.serviceAccountAdmin",
+    "roles/iam.securityAdmin",
+    "roles/iam.serviceAccountOpenIdTokenCreator",
+    "roles/iam.workloadIdentityUser",
+    "roles/iam.serviceAccountKeyAdmin",
+    "roles/iam.serviceAccountUser",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/iam.serviceAccountCreator",
+    "roles/run.invoker",
+    "roles/run.admin",
+    "roles/run.developer",
+    "roles/run.builder",
+    "roles/serviceusage.serviceUsageConsumer",
+    "roles/serviceusage.serviceUsageViewer",
+    "roles/logging.logWriter",
+    "roles/alloydb.client",
+    "roles/alloydb.admin",
+    "roles/cloudsql.client",
+    "roles/spanner.viewer",
+    "roles/spanner.databaseReader",
+    "roles/spanner.databaseAdmin",
+    "roles/dataflow.worker",
+    "roles/dataflow.admin",
+    "roles/storage.admin",
+    "roles/secretmanager.admin",
+    "roles/artifactregistry.writer",
+    "roles/artifactregistry.admin",
+    "roles/vpcaccess.admin",
+    "roles/compute.networkAdmin",
+    "roles/compute.admin",
+    "roles/compute.securityAdmin",
+    "roles/dns.admin",
+    "roles/dns.peer",
+    "roles/cloudtrace.admin",
+    "roles/cloudtrace.user",
+    "roles/monitoring.metricWriter",
+    "roles/resourcemanager.projectIamAdmin",
+    "roles/iap.admin",
+    "roles/iap.settingsAdmin"
+    # Add any other project-wide roles here
+  ]
+}
+
+# Access the project data object
+data "google_project" "project" {}
+
+# Loop 1: Create multiple IAM role bindings for the GCS BUCKET
+resource "google_storage_bucket_iam_member" "notebook_sa_roles_gcs" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.notebook_sa_bucket_roles)
+
+  bucket = google_storage_bucket.notebook_bucket.name
+  role   = each.key # 'each.key' refers to the current role in the loop
+  member = "serviceAccount:${google_service_account.notebook_service_account.email}"
+
+  depends_on = [ google_service_account.notebook_service_account ]
+}
+
+# Loop 2: Create multiple IAM role bindings for the GCP PROJECT
+resource "google_project_iam_member" "notebook_sa_roles_project" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.notebook_sa_project_roles)
+
+  project = data.google_project.project.id
+  role    = each.key # 'each.key' refers to the current role in the loop
+  member = "serviceAccount:${google_service_account.notebook_service_account.email}"
+
+  depends_on = [ google_service_account.notebook_service_account ]
+}
+
+# --- End: Section for creating a Vertex AI Workbench service account and assigning roles ---
+
+# --- START: Section for creating a Toolbox IAM service account and assigning roles ---
 
 # Create service account for MCP Toolbox
-resource "google_service_account" "toolbox_identity" {
-  account_id   = "toolbox-identity" 
-  display_name = "MCP Toolbox Identity Service Account" 
+resource "google_service_account" "toolbox_service_account" {
+  account_id   = "toolbox-service-account" 
+  display_name = "MCP Toolbox Service Account" 
   description  = "Service account for MCP Toolbox."
   project      = var.gcp_project_id
 }
@@ -590,21 +599,14 @@ locals {
 
   toolbox_sa_project_roles = [
     "roles/secretmanager.secretAccessor",
-    "roles/spanner.viewer",
-    "roles/spanner.databaseReader",
-    "roles/spanner.databaseAdmin",
     "roles/alloydb.client",
     "roles/alloydb.databaseUser",
+    "roles/spanner.viewer",
     "roles/serviceusage.serviceUsageConsumer",
     "roles/serviceusage.serviceUsageViewer",
     "roles/storage.objectAdmin",
     "roles/logging.viewer",
     "roles/logging.logWriter",
-    "roles/cloudsql.editor",
-    "roles/cloudsql.client",
-    "roles/cloudsql.instanceUser",
-    "roles/cloudsql.viewer",
-    "roles/cloudsql.schemaViewer",
     "roles/cloudtrace.admin",
     "roles/cloudtrace.user",
     "roles/monitoring.metricWriter"
@@ -619,9 +621,9 @@ resource "google_storage_bucket_iam_member" "toolbox_sa_gcs_roles" {
 
   bucket = google_storage_bucket.notebook_bucket.name
   role   = each.key # 'each.key' refers to the current role in the loop
-  member = "serviceAccount:${google_service_account.toolbox_identity.email}"
+  member = "serviceAccount:${google_service_account.toolbox_service_account.email}"
 
-  depends_on = [ google_service_account.toolbox_identity ]
+  depends_on = [ google_service_account.toolbox_service_account ]
 }
 
 # Loop 2: Create multiple IAM role bindings for the GCP PROJECT
@@ -631,12 +633,92 @@ resource "google_project_iam_member" "toolbox_sa_project_roles" {
 
   project = data.google_project.project.id
   role    = each.key # 'each.key' refers to the current role in the loop
-  member  = "serviceAccount:${google_service_account.toolbox_identity.email}"
+  member  = "serviceAccount:${google_service_account.toolbox_service_account.email}"
 
-  depends_on = [ google_service_account.toolbox_identity ]
+  depends_on = [ google_service_account.toolbox_service_account ]
 }
 
 # --- END: Section for creating a Toolbox IAM user and assigning roles ---
+
+# --- START: Section for creating an ADK IAM service account and assigning roles ---
+
+# Create service account for MCP Toolbox
+resource "google_service_account" "adk_service_account" {
+  account_id   = "adk-service-account" 
+  display_name = "ADK Agent Service Account" 
+  description  = "Service account for ADK Agent."
+  project      = var.gcp_project_id
+}
+
+locals {
+
+  adk_sa_bucket_roles = [
+    "roles/storage.objectViewer",
+    "roles/storage.objectCreator",
+    # Add any other bucket-specific roles here
+  ]
+
+  adk_sa_project_roles = [
+    "roles/aiplatform.user",
+    "roles/run.viewer",
+    "roles/run.invoker",
+    "roles/run.serviceAgent",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/iam.serviceAccountUser",
+    "roles/iam.serviceAccountOpenIdTokenCreator",
+    "roles/iam.workloadIdentityUser",
+    "roles/serviceusage.serviceUsageConsumer",
+    "roles/serviceusage.serviceUsageViewer",
+    "roles/storage.objectAdmin",
+    "roles/secretmanager.secretAccessor",
+    "roles/logging.viewer",
+    "roles/logging.logWriter",
+    "roles/cloudsql.viewer",
+    "roles/cloudsql.schemaViewer",
+    "roles/cloudsql.client",
+    "roles/cloudsql.instanceUser",
+    "roles/cloudtrace.user",
+    "roles/cloudtrace.agent",
+    "roles/monitoring.viewer",
+    "roles/monitoring.metricWriter",
+    "roles/logging.viewer",
+    "roles/logging.viewAccessor",
+    "roles/logging.logWriter",
+    "roles/logging.serviceAgent",
+    "roles/logging.linkViewer",
+    "roles/logging.sqlAlertWriter",
+    "roles/logging.fieldAccessor",
+    "roles/logging.configWriter",
+    "roles/logging.bucketWriter",
+    # Add any other project-specific roles here
+  ]
+}
+
+# Loop 1: Create multiple IAM role bindings for the GCS BUCKET
+resource "google_storage_bucket_iam_member" "adk_sa_roles_gcs" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.adk_sa_bucket_roles)
+
+  bucket = google_storage_bucket.notebook_bucket.name
+  role   = each.key # 'each.key' refers to the current role in the loop
+  member = "serviceAccount:${google_service_account.adk_service_account.email}"
+
+  depends_on = [ google_service_account.adk_service_account ]
+}
+
+# Loop 2: Create multiple IAM role bindings for the GCP PROJECT
+resource "google_project_iam_member" "adk_sa_roles_project" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.adk_sa_project_roles)
+
+  project = data.google_project.project.id
+  role    = each.key # 'each.key' refers to the current role in the loop
+  member  = "serviceAccount:${google_service_account.adk_service_account.email}"
+
+  depends_on = [ google_service_account.adk_service_account ]
+}
+
+# --- END: Section for creating an ADK IAM service account and assigning roles ---
 
 # Create a GCS bucket
 resource "google_storage_bucket" "notebook_bucket" {
@@ -684,6 +766,10 @@ resource "google_workbench_instance" "google_workbench" {
     # Enable public IP address
     disable_public_ip = true
 
+    service_accounts {
+      email = google_service_account.notebook_service_account.email
+    }
+
     # Shielded VM Configuration
     shielded_instance_config {
       enable_secure_boot          = true
@@ -716,18 +802,14 @@ resource "google_workbench_instance" "google_workbench" {
 
       EOF
     }
-    
-
 
   }
-
-  # The instance is implicitly owned by the service account running Terraform.
-  # Access is managed via IAM roles (e.g., Notebooks Runner, AI Platform User).
 
   depends_on = [
     google_project_service.apis, 
     google_compute_router_nat.nat,
-    google_storage_bucket_object.notebooks
+    google_storage_bucket_object.notebooks,
+    google_service_account.notebook_service_account
   ]
 }
 

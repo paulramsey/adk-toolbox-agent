@@ -52,13 +52,17 @@ The [Terraform template](./terraform/main.tf) in this repository is designed to 
 
 1. Set your project context by running the following:
 
+    > IMPORTANT: Replace YOUR_PROJECT_ID with the id of your GCP project before running the command below.
+
     ``` bash
-    gcloud config set project adk-toolbox
-    gcloud auth application-default set-quota-project adk-toolbox
+    gcloud config set project YOUR_PROJECT_ID
+    gcloud auth application-default set-quota-project adk-YOUR_PROJECT_ID
     ```
 
 1. Define environment variables. 
     > IMPORTANT: Replace the values for YOUR_PROJECT, YOUR_REGION, YOUR_ALLOYDB_ PASSWORD, and YOUR_CSQL_PASSWORD in the command below before running it.
+
+    > IMPORTANT: Take note of the AlloyDB and Cloud SQL passwords you define here, as you will need them throughout the lab.
 
     ``` bash
     export TF_VAR_gcp_project_id="YOUR_PROJECT"
