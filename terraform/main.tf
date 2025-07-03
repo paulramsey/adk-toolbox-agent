@@ -465,7 +465,13 @@ locals {
     "roles/browser",
     "roles/viewer",
     "roles/iam.serviceAccountTokenCreator",
-    "roles/monitoring.metricWriter"
+    "roles/monitoring.metricWriter",
+    "roles/artifactregistry.admin",
+    "roles/artifactregistry.writer",
+    "roles/run.admin",
+    "roles/run.invoker",
+    "roles/run.builder",
+    "roles/run.developer"
     # Add any other project-wide roles here
   ]
 }
