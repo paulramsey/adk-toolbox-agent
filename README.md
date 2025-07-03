@@ -62,6 +62,11 @@ The [Terraform template](./terraform/main.tf) in this repository is designed to 
 1. Define environment variables. 
     > IMPORTANT: Replace the values for YOUR_PROJECT, YOUR_REGION, YOUR_ALLOYDB_ PASSWORD, and YOUR_CSQL_PASSWORD in the command below before running it.
 
+    > IMPORTANT: The passwords you choose for AlloyDB and Cloud SQL must conform to the following minimum complexity requirements: 
+        "password.min_uppercase_letters"             = "1"
+        "password.min_numerical_chars"               = "1"
+        "password.min_pass_length"                   = "10"
+
     > IMPORTANT: Take note of the AlloyDB and Cloud SQL passwords you define here, as you will need them throughout the lab.
 
     ``` bash
@@ -89,9 +94,9 @@ The [Terraform template](./terraform/main.tf) in this repository is designed to 
     terraform apply
     ```
 
-1. Login to the Vertex AI Workbench endpoint listed in the Terraform output.
+1. Copy the value of the `workbench_proxy_uri` Terraform output (last line of output) and paste it into a browser to access the Vertex AI Workbench environment where you will complete the labs.
 
-1. Walk through the following notebook, which will be loaded into the Workbench environment for you automatically by Terraform:
+1. Walk through the following notebooks, which will be loaded into the Workbench environment for you automatically into the Vertex AI Workbench instance by Terraform (in the `./notebooks` directory):
 
     - [1_setup_and_explore_databases.ipynb](./notebooks/1_setup_and_explore_databases.ipynb): This notebook is the first step in the lab, designed to finalize the setup of the database environment and to familiarize you with the database schemas and data. The core infrastructure, including an AlloyDB cluster and a Spanner instance, is already provisioned via Terraform. The notebook will guide you through the final setup steps for these databases and allow you to explore their structure and content.
     - [2_deploy_mcp_toolbox.ipynb](./notebooks/2_deploy_mcp_toolbox.ipynb): MCP Toolbox for Databases is an open source MCP server that enables you to develop Database tools for agents easier, faster, and more securely by handling the complexities such as connection pooling, authentication, and more. This notebook walks you through creating two simple MCP Toolbox tools and deploying them onto a Toolbox service in Cloud Run.

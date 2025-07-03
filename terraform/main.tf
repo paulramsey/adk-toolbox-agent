@@ -395,7 +395,8 @@ resource "google_spanner_database" "database" {
 resource "null_resource" "trigger_spanner_data_load" {
   depends_on = [
     google_spanner_database.database,
-    google_storage_bucket.notebook_bucket
+    google_storage_bucket.notebook_bucket,
+    google_project_iam_member.project_compute_sa_roles
   ]
 
   # The triggers block ensures this null_resource runs only when the Spanner
@@ -439,6 +440,66 @@ resource "null_resource" "trigger_spanner_data_load" {
   }
 }
 
+# --- START: Section for assigning permissions to the default compute service account ---
+
+# Define lists of roles to assign to the default compute service account
+locals {
+  # Roles to be applied ONLY to the GCS notebook bucket
+  compute_sa_bucket_roles = [
+    "roles/storage.objectViewer",
+    "roles/storage.objectCreator",
+    # Add any other bucket-specific roles here
+  ]
+
+  # Roles to be applied to the ENTIRE GCP project
+  compute_sa_project_roles = [
+    "roles/dataflow.worker",
+    "roles/dataflow.admin",
+    "roles/serviceusage.serviceUsageConsumer",
+    "roles/logging.logWriter",
+    "roles/spanner.viewer",
+    "roles/spanner.databaseReader",
+    "roles/spanner.databaseAdmin",
+    "roles/storage.admin",
+    "roles/iam.serviceAccountUser",
+    "roles/browser",
+    "roles/viewer",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/monitoring.metricWriter"
+    # Add any other project-wide roles here
+  ]
+}
+
+# Access the project data object
+data "google_project" "project" {}
+
+# Define the service account name once to keep the code DRY (Don't Repeat Yourself)
+locals {
+  compute_service_account_member = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
+# Loop 1: Create multiple IAM role bindings for the GCS BUCKET
+resource "google_storage_bucket_iam_member" "gcs_compute_sa_roles" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.compute_sa_bucket_roles)
+
+  bucket = google_storage_bucket.notebook_bucket.name
+  role   = each.key # 'each.key' refers to the current role in the loop
+  member = local.compute_service_account_member
+}
+
+# Loop 2: Create multiple IAM role bindings for the GCP PROJECT
+resource "google_project_iam_member" "project_compute_sa_roles" {
+  # This for_each creates a resource instance for each role in the list
+  for_each = toset(local.compute_sa_project_roles)
+
+  project = data.google_project.project.id
+  role    = each.key # 'each.key' refers to the current role in the loop
+  member  = local.compute_service_account_member
+}
+
+# --- END: Section for assigning permissions to the default compute service account ---
+
 # --- START: Section for assigning permissions to the default AlloyDB service account ---
 
 # Define the service account name once to keep the code DRY (Don't Repeat Yourself)
@@ -465,6 +526,8 @@ resource "google_storage_bucket_iam_member" "alloydb_gcs_sa_roles" {
   bucket = google_storage_bucket.notebook_bucket.name
   role   = each.key # 'each.key' refers to the current role in the loop
   member = local.alloydb_service_account_member
+
+  depends_on = [ google_alloydb_instance.default ]
 }
 
 # Loop 2: Create multiple IAM role bindings for the GCP PROJECT
@@ -475,6 +538,8 @@ resource "google_project_iam_member" "project_alloydb_sa_roles" {
   project = data.google_project.project.id
   role    = each.key # 'each.key' refers to the current role in the loop
   member  = local.alloydb_service_account_member
+
+  depends_on = [ google_alloydb_instance.default ]
 }
 
 # --- END: Section for assigning permissions to the default AlloyDB service account ---
@@ -515,6 +580,7 @@ locals {
     "roles/iam.serviceAccountUser",
     "roles/iam.serviceAccountTokenCreator",
     "roles/iam.serviceAccountCreator",
+    "roles/iam.roleAdmin",
     "roles/run.invoker",
     "roles/run.admin",
     "roles/run.developer",
@@ -549,9 +615,6 @@ locals {
     # Add any other project-wide roles here
   ]
 }
-
-# Access the project data object
-data "google_project" "project" {}
 
 # Loop 1: Create multiple IAM role bindings for the GCS BUCKET
 resource "google_storage_bucket_iam_member" "notebook_sa_roles_gcs" {
@@ -602,6 +665,7 @@ locals {
     "roles/alloydb.client",
     "roles/alloydb.databaseUser",
     "roles/spanner.viewer",
+    "roles/spanner.databaseUser",
     "roles/serviceusage.serviceUsageConsumer",
     "roles/serviceusage.serviceUsageViewer",
     "roles/storage.objectAdmin",
