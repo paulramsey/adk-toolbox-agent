@@ -56,7 +56,7 @@ The [Terraform template](./terraform/main.tf) in this repository is designed to 
 
     ``` bash
     gcloud config set project YOUR_PROJECT_ID
-    gcloud auth application-default set-quota-project adk-YOUR_PROJECT_ID
+    gcloud auth application-default set-quota-project YOUR_PROJECT_ID
     ```
 
 1. Define environment variables. 

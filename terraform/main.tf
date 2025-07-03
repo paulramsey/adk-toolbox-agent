@@ -218,7 +218,7 @@ resource "google_sql_database_instance" "postgres" {
 # Create a PSC endpoint to connect to Cloud SQL from the VPC
 resource "google_compute_address" "default" {
   name         = "psc-compute-address"
-  region       = "us-central1"
+  region       = var.region
   address_type = "INTERNAL"
   subnetwork   = google_compute_network.demo_vpc.name
 }
@@ -263,7 +263,7 @@ resource "google_dns_record_set" "psc_instance_record" {
 # Create a Spanner instance
 resource "google_spanner_instance" "default" {
   name              = "my-spanner-instance"
-  config            = "regional-us-central1"
+  config            = "regional-${var.region}"
   display_name      = "Financial Graph Database"
   processing_units  = 100
   edition           = "ENTERPRISE"
