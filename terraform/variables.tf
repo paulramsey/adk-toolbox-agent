@@ -20,3 +20,9 @@ variable "cloud_sql_password" {
   type        = string
   sensitive   = true
 }
+
+variable "argolis" {
+  description = "Whether to override Argolis policies."
+  type        = bool
+  default     = false
+}

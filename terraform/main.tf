@@ -24,6 +24,18 @@ provider "google" {
 # Get authentication token for the local-exec provisioner
 data "google_client_config" "current" {}
 
+# Set gcloud project scope
+resource "null_resource" "gcloud_setup" {
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      gcloud config set project ${var.gcp_project_id}
+      gcloud auth application-default set-quota-project ${var.gcp_project_id}
+      gcloud auth configure-docker ${var.region}-docker.pkg.dev --quiet
+    EOT
+  }
+}
+
 # Enable the required Google Cloud APIs
 resource "google_project_service" "apis" {
   for_each = toset([
@@ -57,6 +69,37 @@ resource "google_project_service" "apis" {
   ])
   service                    = each.key
   disable_dependent_services = true
+}
+
+# Override the Argolis policies
+resource "null_resource" "override_argolis_policies" {
+  count = var.argolis ? 1 : 0
+  depends_on = [google_project_service.apis]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      # Update org policies
+      echo "Updating org policies"
+      declare -a policies=("constraints/run.allowedIngress"
+        "constraints/iam.allowedPolicyMemberDomains"
+        "constraints/compute.vmExternalIpAccess"
+      )
+      for policy in "$${policies[@]}"; do
+        cat <<EOF >new_policy.yaml
+      constraint: $policy
+      listPolicy:
+        allValues: ALLOW
+      EOF
+        gcloud resource-manager org-policies set-policy new_policy.yaml --project="${var.gcp_project_id}"
+      done
+
+      rm new_policy.yaml
+
+      # Wait for policies to apply
+      echo "Waiting 90 seconds for Org policies to apply..."
+      sleep 90
+    EOT
+  }
 }
 
 # Create a custom VPC
@@ -502,6 +545,8 @@ resource "google_project_iam_member" "project_compute_sa_roles" {
   project = data.google_project.project.id
   role    = each.key # 'each.key' refers to the current role in the loop
   member  = local.compute_service_account_member
+
+  depends_on = [ google_project_service.apis ]
 }
 
 # --- END: Section for assigning permissions to the default compute service account ---
