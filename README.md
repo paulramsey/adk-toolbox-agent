@@ -62,6 +62,8 @@ The [Terraform template](./terraform/main.tf) in this repository is designed to 
 1. Define environment variables. 
     > IMPORTANT: Replace the values for YOUR_PROJECT, YOUR_REGION, YOUR_ALLOYDB_ PASSWORD, and YOUR_CSQL_PASSWORD in the command below before running it.
 
+    > IMPORTANT: Set `TF_VAR_argolis` to `true` if deploying to an Argolis environment. This will handle necessary org policies for you.
+
     > IMPORTANT: The passwords you choose for AlloyDB and Cloud SQL must conform to the following minimum complexity requirements: 
         "password.min_uppercase_letters"             = "1"
         "password.min_numerical_chars"               = "1"
@@ -74,6 +76,7 @@ The [Terraform template](./terraform/main.tf) in this repository is designed to 
     export TF_VAR_region="YOUR_REGION"
     export TF_VAR_alloydb_password="YOUR_ALLOYDB_ PASSWORD"
     export TF_VAR_cloud_sql_password="YOUR_CSQL_PASSWORD"
+    export TF_VAR_argolis="false"
     ```
 
 1. Deploy base infrastructure with Terraform.

@@ -199,3 +199,7 @@ terraform.tfstate*
 
 # Flag files
 .dataflow_spanner_load_completed
+
+# Mac metadata files
+.DS_Store
+**/.DS_Store
