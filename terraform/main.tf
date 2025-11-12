@@ -213,6 +213,7 @@ resource "google_alloydb_instance" "default" {
   database_flags = {
     "google_ml_integration.enable_model_support"    = "on"
     "google_ml_integration.enable_ai_query_engine"  = "on"
+    "alloydb_ai_nl.enabled"                         = "on"
     "password.enforce_complexity"                   = "on"
     "password.min_uppercase_letters"                = "1"
     "password.min_numerical_chars"                  = "1"
