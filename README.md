@@ -76,7 +76,7 @@ The [Terraform template](./terraform/main.tf) in this repository is designed to 
     export TF_VAR_region="YOUR_REGION"
     export TF_VAR_alloydb_password="YOUR_ALLOYDB_ PASSWORD"
     export TF_VAR_cloud_sql_password="YOUR_CSQL_PASSWORD"
-    export TF_VAR_argolis="false"
+    export TF_VAR_argolis="false" # Set true if deploying to Argolis
     ```
 
 1. Deploy base infrastructure with Terraform.
