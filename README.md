@@ -4,7 +4,15 @@
 
 This hands-on lab guides you through building and deploying a sophisticated, secure AI agent capable of interacting with sensitive financial data in an enterprise environment. You'll gain hands-on experience with Google's Agent Development Kit (ADK) and MCP Toolbox for Databases, learning how to create and customize powerful tools for your agent. More importantly, you'll master the critical security principles and services necessary for enterprise-grade AI, including the configuration of private networks (VPC, PSC, PSA, GPA) and the implementation of robust access controls with Identity-Aware Proxy (IAP). By completing the lab, you will be equipped with the knowledge to build and deploy your own secure, interactive, and autonomous agents that can safely connect to and reason about sensitive data in a real-world enterprise setting.
 
+
 ![ADK Agent with MCP Toolbox](./notebooks/img/adk-ui/scenario_3.png)
+
+## Demo
+
+Watch a demo of the completed lab here:
+
+[![Watch the demo](https://img.youtube.com/vi/6NXDc4cPNG8/0.jpg)](https://www.youtube.com/watch?v=6NXDc4cPNG8)
+
 
 ## What You'll Need
 
