@@ -475,7 +475,7 @@ resource "null_resource" "trigger_spanner_data_load" {
           --gcs-location="gs://dataflow-templates-${var.region}/latest/GCS_Avro_to_Cloud_Spanner" \
           --region="${var.region}" \
           --staging-location="gs://${google_storage_bucket.notebook_bucket.name}/dataflow_temp" \
-          --parameters="instanceId=${google_spanner_instance.default.name},databaseId=${google_spanner_database.database.name},inputDir=gs://pr-public-demo-data/adk-toolbox-demo/data/spanner-finance-graph/" \
+          --parameters="instanceId=${google_spanner_instance.default.name},databaseId=${google_spanner_database.database.name},inputDir=gs://pr-public-demo-data/adk-toolbox-demo/data/latest/spanner-finance-graph/" \
           --network="${google_compute_network.demo_vpc.name}"
 
         # Create a flag file to indicate the job has been initiated.
@@ -917,6 +917,17 @@ resource "google_workbench_instance" "google_workbench" {
 
         # Remove the sample notebook to avoid confusion
         rm -f /home/jupyter/notebook_template.ipynb
+
+        # Silence gRPC and Abseil logging
+        echo "GRPC_ENABLE_FORK_SUPPORT=false" >> /etc/environment
+        echo "GRPC_VERBOSITY=ERROR" >> /etc/environment
+        echo "GLOG_minloglevel=2" >> /etc/environment
+
+        # Supress Future Warnings for Google api_core (waiting for VAI Workbench to support Python > 3.10 by default)
+        echo "PYTHONWARNINGS='ignore::FutureWarning:google.api_core.*'" >> /etc/environment
+
+        # Restart the Jupyter service to pick up the new environment variables
+        systemctl restart jupyter.service
 
       EOF
     }
