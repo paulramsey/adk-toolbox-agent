@@ -923,6 +923,12 @@ resource "google_workbench_instance" "google_workbench" {
         echo "GRPC_VERBOSITY=ERROR" >> /etc/environment
         echo "GLOG_minloglevel=2" >> /etc/environment
 
+        # Supress Future Warnings for Google api_core (waiting for VAI Workbench to support Python > 3.10 by default)
+        echo "PYTHONWARNINGS='ignore::FutureWarning:google.api_core.*'" >> /etc/environment
+
+        # Restart the Jupyter service to pick up the new environment variables
+        systemctl restart jupyter.service
+
       EOF
     }
 
