@@ -13,6 +13,13 @@ Watch a demo of the completed lab here:
 
 [![Watch the demo](https://img.youtube.com/vi/6NXDc4cPNG8/0.jpg)](https://www.youtube.com/watch?v=6NXDc4cPNG8)
 
+## Architecture
+
+This diagram illustrates the architecture of the completed lab:
+
+![ADK Agent with MCP Toolbox](./img/demo-architecture.png)
+
+# Run the Lab
 
 ## What You'll Need
 
