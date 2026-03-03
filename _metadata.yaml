@@ -45,5 +45,4 @@ products:
   - vertex_ai
   - alloydb
   - cloud_spanner
-  - cloud_run
-  - identity_aware_proxy
+  - cloud_sql
