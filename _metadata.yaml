@@ -1,0 +1,51 @@
+file_type: demo
+
+type: application
+
+title: Build an Enterprise-ready AI Agent with Agent Development Kit (ADK) and MCP Toolbox
+
+thumbnail_summary: A hands-on lab guiding you through building and deploying a secure, enterprise-ready AI Agent using ADK and MCP Toolbox.
+
+purpose: This lab demonstrates how to build and deploy a sophisticated, secure AI agent capable of interacting with sensitive financial data in an enterprise environment using Google's Agent Development Kit (ADK).
+
+business_value: Equip developers and organizations to build, deploy, and operationalize autonomous agents that can safely connect to and reason about sensitive data across enterprise systems.
+
+technical_value: Gain hands-on experience integrating ADK, MCP Toolbox, AlloyDB, Cloud SQL, and Spanner while mastering critical security controls like VPC, Private Service Connect (PSC), and Identity-Aware Proxy (IAP).
+
+owner: paulramsey
+
+contributors:
+  - paulramsey
+
+channel_id: 17
+
+images:
+  - https://raw.githubusercontent.com/paulramsey/adk-toolbox-agent/main/notebooks/img/adk-ui/scenario_3.png
+  - https://raw.githubusercontent.com/paulramsey/adk-toolbox-agent/main/img/demo-architecture.png
+
+demo_guide: https://github.com/paulramsey/adk-toolbox-agent/blob/main/README.md
+
+artifacts:
+  - title: adk-toolbox-agent GitHub Repository
+    type: code_repo
+    link: https://github.com/paulramsey/adk-toolbox-agent
+  - title: Demo Video Walkthrough
+    type: video
+    link: https://www.youtube.com/watch?v=6NXDc4cPNG8
+
+featured_artifact_title: adk-toolbox-agent GitHub Repository
+
+featured_video_artifact_title: Demo Video Walkthrough
+
+industries:
+  - financial_services
+  - all
+
+products:
+  - vertex_ai
+  - alloydb
+  - alloydb_for_postgresql
+  - spanner
+  - cloud_run
+  - identity_aware_proxy
+  - virtual_private_cloud
