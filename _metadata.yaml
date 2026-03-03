@@ -44,8 +44,6 @@ industries:
 products:
   - vertex_ai
   - alloydb
-  - alloydb_for_postgresql
-  - spanner
+  - cloud_spanner
   - cloud_run
   - identity_aware_proxy
-  - virtual_private_cloud
